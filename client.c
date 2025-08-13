@@ -1,3 +1,5 @@
+#include "canvas.h"
+
 #include <SDL2/SDL.h>
 
 #include <stdio.h>
@@ -25,21 +27,6 @@ const char colors[][3] = {
 
 const char hl_color[] = {0x89, 0x89, 0x89}; /* gray */
 
-typedef struct point point_t;
-struct point{
-	int16_t x;
-	int16_t y;
-	point_t *next;
-};
-
-typedef struct segment segment_t;
-struct segment{
-	uint8_t color;
-	point_t *head;
-	point_t *tail;
-	segment_t *next;
-};
-
 typedef struct client client_t;
 struct client{
 	SDL_Window *w;
@@ -50,43 +37,6 @@ struct client{
 	segment_t *head;
 	segment_t *tail;
 };
-
-segment_t *
-new_segment(int16_t x, int16_t y, uint8_t color){
-	segment_t *segment;
-
-	segment = malloc(sizeof(segment_t));
-	segment->color = color;
-	segment->head = malloc(sizeof(point_t));
-	segment->head->x = x;
-	segment->head->y = y;
-	segment->head->next = NULL;
-	segment->tail = segment->head;
-	return segment;
-}
-
-void
-add_point(segment_t *segment, int16_t x, int16_t y){
-	point_t *new;
-
-	new = malloc(sizeof(point_t));
-	new->x = x;
-	new->y = y;
-	new->next = NULL;
-	segment->tail->next = new;
-	segment->tail = new;
-}
-
-void
-free_segment(segment_t *segment){
-	point_t *curr, *next;
-
-	for(curr = segment->head; curr; curr = next){
-		next = curr->next;
-		free(curr);
-	}
-	free(segment);
-}
 
 char
 init_window(client_t *c){
@@ -111,32 +61,11 @@ init_window(client_t *c){
 }
 
 void
-add_segment(client_t *c, segment_t *segment){
-	if(!segment->head->next) return; /* discard single-point segments */
-	if(!c->head) c->head = c->tail = segment;
-	else{
-		c->tail->next = segment;
-		c->tail = segment;
-	}
-}
-
-void
-clear_canvas(client_t *c){
-	segment_t *curr, *next;
-
-	for(curr = c->head; curr; curr = next){
-		next = curr->next;
-		free_segment(curr);
-	}
-	c->head = c->tail = NULL;
-}
-
-void
 destroy_window(client_t *c){
 	SDL_DestroyRenderer(c->r);
 	SDL_DestroyWindow(c->w);
 	SDL_Quit();
-	clear_canvas(c);
+	clear_canvas(&c->head, &c->tail);
 	if(c->curr) free_segment(c->curr);
 }
 
@@ -233,7 +162,7 @@ handle_event(client_t *c){
 	/* only relevant when a stroke is being finished, otherwise do nothing */
 	else if(e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT){
 		if(c->curr){
-			add_segment(c, c->curr);
+			add_segment(c->curr, &c->head, &c->tail);
 			c->curr = NULL;
 		}
 	}
@@ -256,7 +185,7 @@ handle_event(client_t *c){
 
 	/* space key clears the canvas */
 	else if(e.type == SDL_KEYDOWN && e.key.keysym.sym == ' '){
-		clear_canvas(c);
+		clear_canvas(&c->head, &c->tail);
 		redraw_window(c);
 		SDL_RenderPresent(c->r);
 	}
