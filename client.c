@@ -27,8 +27,8 @@ const char hl_color[] = {0x89, 0x89, 0x89}; /* gray */
 
 typedef struct point point_t;
 struct point{
-	uint16_t x;
-	uint16_t y;
+	int16_t x;
+	int16_t y;
 	point_t *next;
 };
 
@@ -52,7 +52,7 @@ struct client{
 };
 
 segment_t *
-new_segment(uint16_t x, uint16_t y, uint8_t color){
+new_segment(int16_t x, int16_t y, uint8_t color){
 	segment_t *segment;
 
 	segment = malloc(sizeof(segment_t));
@@ -66,7 +66,7 @@ new_segment(uint16_t x, uint16_t y, uint8_t color){
 }
 
 void
-add_point(segment_t *segment, uint16_t x, uint16_t y){
+add_point(segment_t *segment, int16_t x, int16_t y){
 	point_t *new;
 
 	new = malloc(sizeof(point_t));
@@ -140,7 +140,7 @@ clear_window(client_t *c){
 }
 
 void
-draw_line(client_t *c, uint16_t xi, uint16_t yi, uint16_t xf, uint16_t yf, uint8_t color){
+draw_line(client_t *c, int16_t xi, int16_t yi, int16_t xf, int16_t yf, uint8_t color){
 	uint8_t r, g, b;
 
 	r = colors[color][0];
@@ -188,7 +188,7 @@ draw_colors(client_t *c){
 }
 
 char
-select_color(client_t *c, uint16_t x, uint16_t y){
+select_color(client_t *c, int16_t x, int16_t y){
 	if(y >= COLORSEL_H) return 0;
 	c->color = x / (WINDOW_W / 8);
 	return 1;
@@ -206,7 +206,7 @@ redraw_window(client_t *c){
 char
 handle_event(client_t *c){
 	SDL_Event e;
-	uint16_t xi, yi, xf, yf;
+	int16_t xi, yi, xf, yf;
 
 	if(!SDL_PollEvent(&e)) return 1;
 	if(e.type == SDL_QUIT) return 0;
