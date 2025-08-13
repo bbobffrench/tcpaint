@@ -94,7 +94,14 @@ init_window(client_t *c){
 		fprintf(stderr, "SDL2 failed to initialize.\n");
 		return 0;
 	}
-	c->w = SDL_CreateWindow("paint", 0, 0, 800, 800, SDL_WINDOW_SHOWN);
+	c->w = SDL_CreateWindow(
+		"tcpaint",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		WINDOW_W,
+		WINDOW_H,
+		SDL_WINDOW_SHOWN
+	);
 	c->r = SDL_CreateRenderer(c->w, -1, SDL_RENDERER_ACCELERATED);
 	c->color = 0;
 	c->last_sample = 0;
