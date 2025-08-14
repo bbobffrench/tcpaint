@@ -80,7 +80,7 @@ char
 recv_ctrl(int sockfd, uint8_t *color, uint16_t *num_points){
 	uint8_t ctrl[4];
 
-	if(!recv(sockfd, ctrl, sizeof(ctrl), 0) <= 0) return 0;
+	if(recv(sockfd, ctrl, sizeof(ctrl), 0) <= 0) return 0;
 	*color = ctrl[1];
 	memcpy(num_points, &ctrl[2], sizeof(uint16_t));
 	*num_points = ntohs(*num_points);
