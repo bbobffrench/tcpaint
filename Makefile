@@ -1,5 +1,5 @@
 CC      := gcc
-CFLAGS  := -O3 -ansi
+CFLAGS  := -O3 -ansi -Wall -pedantic
 LDFLAGS := -lSDL2
 
 tcpaint: client.o canvas.o
@@ -8,7 +8,7 @@ tcpaint: client.o canvas.o
 canvas.o: canvas.c canvas.h
 	$(CC) -c $(CFLAGS) $<
 
-client.o: client.c canvas.h
+client.o: client.c client.h canvas.h
 	$(CC) -c $(CFLAGS) $<
 
 .PHONY: clean
