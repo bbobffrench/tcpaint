@@ -2,6 +2,8 @@
 
 #include <SDL2/SDL.h>
 
+#include <unistd.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -29,26 +31,60 @@ const uint8_t hl_color[] = {(uint8_t)0x89, (uint8_t)0x89, (uint8_t)0x89};
 
 const uint8_t bg_color[] = {(uint8_t)0xff, (uint8_t)0xff, (uint8_t)0xff};
 
-void
-init_client(client_t *c){
-	c->color = 0;
-	c->curr = c->head = c->tail = NULL;
-	c->next = NULL;
+char
+add_client(client_t **client, int sockfd, uint8_t uid){
+	client_t *curr, *new;
+
+	new = malloc(sizeof(client_t));
+	new->sockfd = sockfd;
+	new->uid = uid;
+	new->color = 0;
+	new->curr = new->head = new->tail = NULL;
+	new->next = NULL;
+
+	if(!*client){
+		*client = new;
+		return 1;
+	}
+	for(curr = *client; curr; curr = curr->next){
+		if(curr->uid == uid){
+			if(curr->sockfd == -1){
+				curr->sockfd = sockfd;
+				break;
+			}
+			else{
+				free(new);
+				return 0;
+			}
+		}
+		if(!curr->next){
+			curr->next = new;
+			break;
+		}
+	}
+	return 1;
 }
 
 void
-destroy_client(client_t *c){
-	clear_canvas(&c->head, &c->tail);
-	if(c->curr) free_segment(c->curr);
+free_clients(client_t *head){
+	client_t *curr, *next;
+
+	for(curr = head; curr; curr = next){
+		if(curr->sockfd != -1) close(curr->sockfd);
+		if(curr->curr) free_segment(curr->curr);
+		clear_canvas(&curr->head, &curr->tail);
+		next = curr->next;
+		free(curr);
+	}
 }
 
-void
+static void
 clear_window(SDL_Renderer *r){
 	SDL_SetRenderDrawColor(r, bg_color[0], bg_color[1], bg_color[2], 0xff);
 	SDL_RenderClear(r);
 }
 
-void
+static void
 draw_line(SDL_Renderer *r, int16_t xi, int16_t yi, int16_t xf, int16_t yf, uint8_t color){
 	if(yi < COLORSEL_H && yf < COLORSEL_H) return;
 	if(yi < COLORSEL_H) yi = COLORSEL_H;
@@ -62,7 +98,7 @@ draw_line(SDL_Renderer *r, int16_t xi, int16_t yi, int16_t xf, int16_t yf, uint8
 	SDL_RenderDrawLine(r, xi, yi, xf, yf);
 }
 
-void
+static void
 draw_segment(SDL_Renderer *r, segment_t *segment){
 	point_t *curr, *prev;
 
@@ -73,7 +109,7 @@ draw_segment(SDL_Renderer *r, segment_t *segment){
 	}
 }
 
-void
+static void
 draw_colors(client_t *c, SDL_Renderer *r){
 	int i;
 	SDL_Rect rect;
@@ -94,14 +130,14 @@ draw_colors(client_t *c, SDL_Renderer *r){
 	SDL_RenderFillRect(r, &rect);
 }
 
-char
+static char
 select_color(client_t *c, int16_t x, int16_t y){
 	if(y >= COLORSEL_H) return 0;
 	c->color = x / (WINDOW_W / 8);
 	return 1;
 }
 
-void
+static void
 redraw_window(client_t *c, SDL_Renderer *r){
 	segment_t *curr;
 
@@ -110,7 +146,7 @@ redraw_window(client_t *c, SDL_Renderer *r){
 	for(curr = c->head; curr; curr = curr->next) draw_segment(r, curr);
 }
 
-char
+static char
 handle_event(client_t *c, SDL_Renderer *r){
 	SDL_Event e;
 	int16_t xi, yi, xf, yf;
@@ -119,7 +155,6 @@ handle_event(client_t *c, SDL_Renderer *r){
 	if(!SDL_PollEvent(&e)) return 1;
 	if(e.type == SDL_QUIT) return 0;
 
-	/* either the start of a stroke, or a color selection */
 	else if(e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT){
 		if(!select_color(c, e.button.x, e.button.y)){
 			c->curr = new_segment(e.button.x, e.button.y, c->color);
@@ -130,8 +165,6 @@ handle_event(client_t *c, SDL_Renderer *r){
 			SDL_RenderPresent(r);
 		}
 	}
-
-	/* only relevant when a stroke is being finished, otherwise do nothing */
 	else if(e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT){
 		if(c->curr){
 			add_segment(c->curr, &c->head, &c->tail);
@@ -139,8 +172,6 @@ handle_event(client_t *c, SDL_Renderer *r){
 			c->curr = NULL;
 		}
 	}
-
-	/* continuation of a segment */
 	else if(e.type == SDL_MOUSEMOTION && e.motion.state & SDL_BUTTON_LMASK){
 		if(c->curr){
 			if(SDL_GetTicks() - last_sample >= SAMPLING_INTERVAL){
@@ -155,15 +186,11 @@ handle_event(client_t *c, SDL_Renderer *r){
 			}
 		}
 	}
-
-	/* space key clears the canvas */
 	else if(e.type == SDL_KEYDOWN && e.key.keysym.sym == ' '){
 		clear_canvas(&c->head, &c->tail);
 		redraw_window(c, r);
 		SDL_RenderPresent(r);
 	}
-
-	/* window redisplay */
 	else if(e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_EXPOSED){
 		redraw_window(c, r);
 		SDL_RenderPresent(r);
@@ -173,7 +200,7 @@ handle_event(client_t *c, SDL_Renderer *r){
 
 int
 main(void){
-	client_t c;
+	client_t *c = NULL;
 	SDL_Window *win;
 	SDL_Renderer *r;
 
@@ -190,13 +217,14 @@ main(void){
 		SDL_WINDOW_SHOWN
 	);
 	r = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-	init_client(&c);
 
-	while(handle_event(&c, r)) SDL_Delay(FRAME_DELAY);
+	add_client(&c, -1, 0);
+
+	while(handle_event(c, r)) SDL_Delay(FRAME_DELAY);
 
 	SDL_DestroyRenderer(r);
 	SDL_DestroyWindow(win);
 	SDL_Quit();
-	destroy_client(&c);
+	free_clients(c);
 	return 0;
 }
