@@ -79,6 +79,10 @@ void
 draw_line(client_t *c, int16_t xi, int16_t yi, int16_t xf, int16_t yf, uint8_t color){
 	uint8_t r, g, b;
 
+	if(yi < COLORSEL_H && yf < COLORSEL_H) return;
+	if(yi < COLORSEL_H) yi = COLORSEL_H;
+	if(yf < COLORSEL_H) yf = COLORSEL_H;
+
 	r = colors[color][0];
 	g = colors[color][1];
 	b = colors[color][2];
