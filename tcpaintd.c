@@ -1,4 +1,4 @@
-#include "client.h"
+ #include "client.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -49,7 +49,31 @@ init_server(server_t *s){
 	return 1;
 }
 
+static void
+stop_server(server_t *s){
+	int i;
+
+	free_clients(s->c);
+	close(s->sockfd);
+	for(i = 0; i < MAX_INCOMING; i++)
+		if(s->pending[i].fd != -1) close(s->pending[i].fd);
+}
+
 static char
+send_state(int sockfd, server_t *s){
+	client_t *curr_c;
+	segment_t *curr_seg;
+
+	for(curr_c = s->c; curr_c; curr_c = curr_c->next){
+		for(curr_seg = curr_c->head; curr_seg; curr_seg = curr_seg->next){
+			if(send(sockfd, &curr_c->uid, 1, 0) <= 0) return 0;
+			if(!send_segment(sockfd, curr_seg)) return 0;
+		}
+	}
+	return 1;
+}
+
+static void
 handle_incoming(server_t *s){
 	struct pollfd pfds;
 	int i;
@@ -69,13 +93,29 @@ handle_incoming(server_t *s){
 	poll(s->pending, MAX_INCOMING, 0);
 	for(i = 0; i < MAX_INCOMING; i++){
 		if(s->pending[i].fd != -1 && s->pending[i].revents & POLLIN){
-			recv(s->pending[i].fd, &uid, 1, 0);
+			if(recv(s->pending[i].fd, &uid, 1, 0) <= 0) close(s->pending[i].fd);
+			else if(send_state(s->pending[i].fd, s)){
+				printf("UID %d connected.\n", uid);
+				if(!add_client(&s->c, s->pending[i].fd, uid)) close(s->pending[i].fd);
+			}
+			else close(s->pending[i].fd);
 			s->pending[i].fd = -1;
-			printf("Connection complete from UID %d.\n", uid);
-			return 0;
 		}
 	}
-	return 1;
+}
+
+static char
+quit_requested(){
+	struct pollfd pfds;
+
+	pfds.fd = STDIN_FILENO;
+	pfds.events = POLLIN;
+	poll(&pfds, 1, 0);
+	if(pfds.revents & POLLIN){
+		if(getchar() == 'q') return 1;
+		else while(getchar() != EOF);
+	}
+	return 0;
 }
 
 int
@@ -87,7 +127,10 @@ main(void){
 		return 1;
 	}
 
-	while(handle_incoming(&s));
+	while(!quit_requested()){
+		handle_incoming(&s);
+	}
 
+	stop_server(&s);
 	return 0;
 }
