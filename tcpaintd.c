@@ -159,15 +159,18 @@ handle_events(server_t *s){
 					case POINT_STREAM_START:
 						if(!recv_point(curr->sockfd, &x, &y)) disconnect_client(curr);
 						else{
+							printf("UID %d: point stream started\n", curr->uid);
 							curr->curr = new_segment(x, y, color);
 							forward_point(s, curr->uid, x, y);
 						}
 						break;
 					case POINT_STREAM_END:
+						printf("UID %d: point stream ended\n", curr->uid);
 						add_segment(curr->curr, &curr->head, &curr->tail);
 						curr->curr = NULL;
 						break;
 					case CLEAR:
+						printf("UID %d: canvas cleared\n");
 						clear_canvas(&curr->head, &curr->tail);
 						break;
 				}
