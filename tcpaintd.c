@@ -44,7 +44,7 @@ init_server(server_t *s){
 
 	for(i = 0; i < MAX_INCOMING; i++){
 		s->pending[i].fd = -1;
-		s->pending[i].events = POLLIN;
+		s->pending[i].events = POLLIN | POLLHUP;
 	}
 	return 1;
 }
@@ -83,7 +83,7 @@ handle_incoming(server_t *s){
 	pfds.events = POLLIN;
 	poll(&pfds, 1, 0);
 	for(i = 0; pfds.revents & POLLIN && i < MAX_INCOMING; i++){
-		if(s->pending[i].fd == -1){
+		if(pfds.revents & POLLIN && s->pending[i].fd == -1){
 			s->pending[i].fd = accept(s->sockfd, NULL, NULL);
 			printf("Connection accepted, waiting for UID...\n");
 			break;
@@ -92,7 +92,11 @@ handle_incoming(server_t *s){
 
 	poll(s->pending, MAX_INCOMING, 0);
 	for(i = 0; i < MAX_INCOMING; i++){
-		if(s->pending[i].fd != -1 && s->pending[i].revents & POLLIN){
+		if(s->pending[i].fd != -1 && s->pending[i].revents & POLLHUP){
+			close(s->pending[i].fd);
+			s->pending[i].fd = -1;
+		}
+		else if(s->pending[i].fd != -1 && s->pending[i].revents & POLLIN){
 			if(recv(s->pending[i].fd, &uid, 1, 0) <= 0) close(s->pending[i].fd);
 			else if(send_state(s->pending[i].fd, s)){
 				printf("UID %d connected.\n", uid);
@@ -100,6 +104,75 @@ handle_incoming(server_t *s){
 			}
 			else close(s->pending[i].fd);
 			s->pending[i].fd = -1;
+		}
+	}
+}
+
+static void
+disconnect_client(client_t *c){
+	printf("UID %d disconnected.\n", c->uid);
+	close(c->sockfd);
+	c->sockfd = -1;
+}
+
+static void
+forward_ctrl(server_t *s, uint8_t src_uid, uint8_t type, uint8_t color){
+	client_t *curr;
+
+	for(curr = s->c; curr && curr->sockfd != -1 && curr->uid != src_uid; curr = curr->next)
+		if(send(curr->sockfd, &src_uid, 1, 0) <= 0 || !send_ctrl(curr->sockfd, type, color, 0))
+			disconnect_client(curr);
+}
+
+static void
+forward_point(server_t *s, uint8_t src_uid, int16_t x, int16_t y){
+	client_t *curr;
+
+	for(curr = s->c; curr && curr->sockfd != -1 && curr->uid != src_uid; curr = curr->next)
+		if(send(curr->sockfd, &src_uid, 1, 0) <= 0 || !send_point(curr->sockfd, x, y))
+			disconnect_client(curr);
+}
+
+static void
+handle_events(server_t *s){
+	client_t *curr;
+	struct pollfd pfds;
+	uint8_t type, color;
+	int16_t x, y;
+
+	for(curr = s->c; curr && curr->sockfd != -1; curr = curr->next){
+		pfds.fd = curr->sockfd;
+		pfds.events = POLLIN | POLLHUP;
+		poll(&pfds, 1, 0);
+		if(pfds.revents & POLLHUP) disconnect_client(curr);
+		else if(pfds.revents & POLLIN){
+			if(curr->curr){
+				if(!recv_point(curr->sockfd, &x, &y)) disconnect_client(curr);
+				else{
+					add_point(curr->curr, x, y);
+					forward_point(s, curr->uid, x, y);
+				}
+			}
+			else if((type = recv_ctrl(curr->sockfd, &color, NULL))){
+				forward_ctrl(s, curr->uid, type, color);
+				switch(type){
+					case POINT_STREAM_START:
+						if(!recv_point(curr->sockfd, &x, &y)) disconnect_client(curr);
+						else{
+							curr->curr = new_segment(x, y, color);
+							forward_point(s, curr->uid, x, y);
+						}
+						break;
+					case POINT_STREAM_END:
+						add_segment(curr->curr, &curr->head, &curr->tail);
+						curr->curr = NULL;
+						break;
+					case CLEAR:
+						clear_canvas(&curr->head, &curr->tail);
+						break;
+				}
+			}
+			else disconnect_client(curr);
 		}
 	}
 }
@@ -129,6 +202,7 @@ main(void){
 
 	while(!quit_requested()){
 		handle_incoming(&s);
+		handle_events(&s);
 	}
 
 	stop_server(&s);

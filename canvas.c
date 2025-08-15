@@ -76,14 +76,16 @@ send_ctrl(int sockfd, uint8_t type, uint8_t color, uint16_t num_points){
 	return 1;
 }
 
-char
+uint8_t
 recv_ctrl(int sockfd, uint8_t *color, uint16_t *num_points){
 	uint8_t ctrl[4];
 
 	if(recv(sockfd, ctrl, sizeof(ctrl), 0) <= 0) return 0;
-	*color = ctrl[1];
-	memcpy(num_points, &ctrl[2], sizeof(uint16_t));
-	*num_points = ntohs(*num_points);
+	if(color) *color = ctrl[1];
+	if(num_points){
+		memcpy(num_points, &ctrl[2], sizeof(uint16_t));
+		*num_points = ntohs(*num_points);
+	}
 	return ctrl[0];
 	return 1;
 }
@@ -132,14 +134,19 @@ recv_segment(int sockfd, uint8_t color, uint16_t num_points){
 }
 
 char
-start_point_stream(int sockfd, uint8_t color, int16_t x, int16_t y){
+send_point(int sockfd, int16_t x, int16_t y){
 	int16_t buff[2];
 
-	if(!send_ctrl(sockfd, POINT_STREAM_START, color, 0)) return 0;
 	buff[0] = htons(x);
 	buff[1] = htons(y);
 	if(send(sockfd, buff, sizeof(buff), 0) <= 0) return 0;
 	return 1;
+}
+
+char
+start_point_stream(int sockfd, uint8_t color, int16_t x, int16_t y){
+	if(!send_ctrl(sockfd, POINT_STREAM_START, color, 0)) return 0;
+	return send_point(sockfd, x, y);
 }
 
 char
@@ -148,10 +155,11 @@ end_point_stream(int sockfd){
 }
 
 char
-recv_point(int sockfd, segment_t *segment){
+recv_point(int sockfd, int16_t *x, int16_t *y){
 	int16_t buff[2];
 
 	if(recv(sockfd, buff, sizeof(buff), 0) <= 0) return 0;
-	add_point(segment, ntohs(buff[0]), ntohs(buff[1]));
+	*x = ntohs(buff[0]);
+	*y = ntohs(buff[1]);
 	return 1;
 }
