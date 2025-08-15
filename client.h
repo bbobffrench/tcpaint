@@ -3,6 +3,8 @@
 
 #include "canvas.h"
 
+#define PORT "50000"
+
 typedef struct client client_t;
 struct client{
 	int	sockfd;
