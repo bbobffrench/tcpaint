@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-enum ctrl_types{POINT_STREAM_START = 1, POINT_STREAM_END, SEGMENT, CLEAR};
+enum ctrl_types{POINT_STREAM_START = 1, POINT_STREAM_END, POINT, SEGMENT, CLEAR};
 
 typedef struct point point_t;
 struct point{

@@ -174,6 +174,7 @@ handle_event(client_t *c, SDL_Renderer *r){
 		clear_canvas(&c->head, &c->tail);
 		redraw_window(c, r);
 		SDL_RenderPresent(r);
+		send_ctrl(c->sockfd, CLEAR, 0, 0);
 	}
 	else if(e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_EXPOSED){
 		redraw_window(c, r);

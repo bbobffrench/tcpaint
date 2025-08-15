@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 segment_t *
@@ -137,6 +138,7 @@ char
 send_point(int sockfd, int16_t x, int16_t y){
 	int16_t buff[2];
 
+	if(!send_ctrl(sockfd, POINT, 0, 0)) return 0;
 	buff[0] = htons(x);
 	buff[1] = htons(y);
 	if(send(sockfd, buff, sizeof(buff), 0) <= 0) return 0;
@@ -145,13 +147,18 @@ send_point(int sockfd, int16_t x, int16_t y){
 
 char
 start_point_stream(int sockfd, uint8_t color, int16_t x, int16_t y){
+	int16_t buff[2];
+
 	if(!send_ctrl(sockfd, POINT_STREAM_START, color, 0)) return 0;
+	buff[0] = htons(x);
+	buff[1] = htons(y);
+	if(send(sockfd, buff, sizeof(buff), 0) <= 0) return 0;
 	return send_point(sockfd, x, y);
 }
 
 char
 end_point_stream(int sockfd){
-	return send_ctrl(sockfd, POINT_STREAM_START, 0, 0);
+	return send_ctrl(sockfd, POINT_STREAM_END, 0, 0);
 }
 
 char

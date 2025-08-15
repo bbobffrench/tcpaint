@@ -146,14 +146,7 @@ handle_events(server_t *s){
 		poll(&pfds, 1, 0);
 		if(pfds.revents & POLLHUP) disconnect_client(curr);
 		else if(pfds.revents & POLLIN){
-			if(curr->curr){
-				if(!recv_point(curr->sockfd, &x, &y)) disconnect_client(curr);
-				else{
-					add_point(curr->curr, x, y);
-					forward_point(s, curr->uid, x, y);
-				}
-			}
-			else if((type = recv_ctrl(curr->sockfd, &color, NULL))){
+			if((type = recv_ctrl(curr->sockfd, &color, NULL))){
 				forward_ctrl(s, curr->uid, type, color);
 				switch(type){
 					case POINT_STREAM_START:
@@ -169,8 +162,16 @@ handle_events(server_t *s){
 						add_segment(curr->curr, &curr->head, &curr->tail);
 						curr->curr = NULL;
 						break;
+					case POINT:
+						if(!recv_point(curr->sockfd, &x, &y)) disconnect_client(curr);
+						else{
+							printf("UID %d: point received\n", curr->uid);
+							add_point(curr->curr, x, y);
+							forward_point(s, curr->uid, x, y);
+						}
+						break;
 					case CLEAR:
-						printf("UID %d: canvas cleared\n");
+						printf("UID %d: canvas cleared\n", curr->uid);
 						clear_canvas(&curr->head, &curr->tail);
 						break;
 				}
