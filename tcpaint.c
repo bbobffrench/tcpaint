@@ -140,6 +140,7 @@ handle_event(client_t *c, SDL_Renderer *r){
 		if(!select_color(c, e.button.x, e.button.y)){
 			c->curr = new_segment(e.button.x, e.button.y, c->color);
 			last_sample = SDL_GetTicks();
+			start_point_stream(c->sockfd, c->color, e.button.x, e.button.y);
 		}
 		else{
 			draw_colors(c, r);
@@ -151,6 +152,7 @@ handle_event(client_t *c, SDL_Renderer *r){
 			add_segment(c->curr, &c->head, &c->tail);
 			last_sample = 0;
 			c->curr = NULL;
+			end_point_stream(c->sockfd);
 		}
 	}
 	else if(e.type == SDL_MOUSEMOTION && e.motion.state & SDL_BUTTON_LMASK){
@@ -164,6 +166,7 @@ handle_event(client_t *c, SDL_Renderer *r){
 				draw_line(r, xi, yi, xf, yf, c->color);
 				SDL_RenderPresent(r);
 				add_point(c->curr, xf, yf);
+				send_point(c->sockfd, xf, yf);
 			}
 		}
 	}
@@ -192,6 +195,7 @@ main(void){
 		return 1;
 	}
 	add_client(&c, sockfd, UID);
+	c->sockfd = sockfd;
 
 	if(SDL_Init(SDL_INIT_VIDEO)){
 		fprintf(stderr, "SDL2 failed to initialize\n");
